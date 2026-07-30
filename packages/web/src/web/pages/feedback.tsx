@@ -1,12 +1,21 @@
 import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Star, Send, Heart, PartyPopper } from "lucide-react";
-import { FEEDBACK_TOPICS } from "@/lib/feedback";
-import { useSettings } from "@/hooks/use-settings";
-import { playSuccess } from "@/lib/sound";
-import { supabase } from "@/supabaseClient"; // Supabase client import kiya
+import { FEEDBACK_TOPICS } from "../lib/feedback";
+import { useSettings } from "../hooks/use-settings";
+import { playSuccess } from "../lib/sound";
+import { supabase } from "../supabaseClient";
 
-function timeAgo(dateString) {
+interface FeedbackItem {
+  id?: string | number;
+  rating: number;
+  topic: string;
+  message: string;
+  name?: string;
+  created_at?: string;
+}
+
+function timeAgo(dateString?: string): string {
   if (!dateString) return "just now";
   const diff = Date.now() - new Date(dateString).getTime();
   const mins = Math.floor(diff / 60000);
@@ -19,24 +28,27 @@ function timeAgo(dateString) {
 
 export default function FeedbackPage() {
   const { nickname } = useSettings();
-  const [rating, setRating] = useState(0);
-  const [hover, setHover] = useState(0);
-  const [topic, setTopic] = useState(FEEDBACK_TOPICS[0]);
-  const [message, setMessage] = useState("");
-  const [name, setName] = useState(nickname || "");
-  const [sent, setSent] = useState(false);
-  const [recent, setRecent] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [rating, setRating] = useState<number>(0);
+  const [hover, setHover] = useState<number>(0);
+  const [topic, setTopic] = useState<string>(FEEDBACK_TOPICS[0]);
+  const [message, setMessage] = useState<string>("");
+  const [name, setName] = useState<string>(nickname || "");
+  const [sent, setSent] = useState<boolean>(false);
+  const [recent, setRecent] = useState<FeedbackItem[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
 
-  // Supabase se sabhi users ke feedback fetch karne ke liye
   async function fetchFeedbacks() {
-    const { data, error } = await supabase
-      .from('feedback')
-      .select('*')
-      .order('created_at', { ascending: false });
+    try {
+      const { data, error } = await supabase
+        .from('feedback')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-    if (!error && data) {
-      setRecent(data);
+      if (!error && data) {
+        setRecent(data as FeedbackItem[]);
+      }
+    } catch (err) {
+      console.error(err);
     }
   }
 
@@ -46,7 +58,6 @@ export default function FeedbackPage() {
 
   const canSend = rating > 0 && message.trim().length > 1 && !loading;
 
-  // Feedback Submit karne ka function
   async function submit() {
     if (!canSend) return;
     setLoading(true);
@@ -63,11 +74,11 @@ export default function FeedbackPage() {
     setLoading(false);
 
     if (error) {
-      alert("Error submitting feedback: " + error.message);
+      alert("Error: " + error.message);
     } else {
       playSuccess();
       setSent(true);
-      fetchFeedbacks(); // List refresh ki
+      fetchFeedbacks();
     }
   }
 
@@ -125,7 +136,6 @@ export default function FeedbackPage() {
                 exit={{ opacity: 0 }}
                 className="space-y-5"
               >
-                {/* Rating */}
                 <div>
                   <label className="text-sm font-600">How's your experience?</label>
                   <div className="mt-2 flex gap-1.5">
@@ -151,11 +161,10 @@ export default function FeedbackPage() {
                   </div>
                 </div>
 
-                {/* Topic */}
                 <div>
                   <label className="text-sm font-600">What's this about?</label>
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {FEEDBACK_TOPICS.map((t) => {
+                    {FEEDBACK_TOPICS.map((t: string) => {
                       const active = topic === t;
                       return (
                         <button
@@ -175,7 +184,6 @@ export default function FeedbackPage() {
                   </div>
                 </div>
 
-                {/* Message */}
                 <div>
                   <label className="text-sm font-600">Your message</label>
                   <textarea
@@ -190,7 +198,6 @@ export default function FeedbackPage() {
                   </div>
                 </div>
 
-                {/* Name */}
                 <div>
                   <label className="text-sm font-600">
                     Your name <span className="font-400 text-muted-foreground">(optional)</span>
@@ -215,14 +222,13 @@ export default function FeedbackPage() {
           </AnimatePresence>
         </div>
 
-        {/* All Recent Feedbacks */}
         {recent.length > 0 && (
           <div className="mt-8">
             <h3 className="font-display text-lg font-700">Community Feedback</h3>
             <div className="mt-3 space-y-3">
               {recent.slice(0, 10).map((f) => (
                 <div
-                  key={f.id}
+                  key={f.id || Math.random()}
                   className="rounded-2xl border border-border/70 bg-card p-4"
                 >
                   <div className="flex items-center justify-between gap-2">
