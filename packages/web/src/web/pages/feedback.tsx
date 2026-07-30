@@ -1,12 +1,14 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Star, Send, Heart, PartyPopper } from "lucide-react";
-import { addFeedback, listFeedback, FEEDBACK_TOPICS } from "@/lib/feedback";
+import { FEEDBACK_TOPICS } from "@/lib/feedback";
 import { useSettings } from "@/hooks/use-settings";
 import { playSuccess } from "@/lib/sound";
+import { supabase } from "@/supabaseClient"; // Supabase client import kiya
 
-function timeAgo(ts: number): string {
-  const diff = Date.now() - ts;
+function timeAgo(dateString) {
+  if (!dateString) return "just now";
+  const diff = Date.now() - new Date(dateString).getTime();
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return "just now";
   if (mins < 60) return `${mins}m ago`;
@@ -21,18 +23,52 @@ export default function FeedbackPage() {
   const [hover, setHover] = useState(0);
   const [topic, setTopic] = useState(FEEDBACK_TOPICS[0]);
   const [message, setMessage] = useState("");
-  const [name, setName] = useState(nickname);
+  const [name, setName] = useState(nickname || "");
   const [sent, setSent] = useState(false);
-  const [recent, setRecent] = useState(() => listFeedback());
+  const [recent, setRecent] = useState([]);
+  const [loading, setLoading] = useState(false);
 
-  const canSend = rating > 0 && message.trim().length > 1;
+  // Supabase se sabhi users ke feedback fetch karne ke liye
+  async function fetchFeedbacks() {
+    const { data, error } = await supabase
+      .from('feedback')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-  function submit() {
+    if (!error && data) {
+      setRecent(data);
+    }
+  }
+
+  useEffect(() => {
+    fetchFeedbacks();
+  }, []);
+
+  const canSend = rating > 0 && message.trim().length > 1 && !loading;
+
+  // Feedback Submit karne ka function
+  async function submit() {
     if (!canSend) return;
-    addFeedback({ rating, topic, message: message.trim(), name: name.trim() });
-    playSuccess();
-    setRecent(listFeedback());
-    setSent(true);
+    setLoading(true);
+
+    const { error } = await supabase
+      .from('feedback')
+      .insert([{
+        rating,
+        topic,
+        message: message.trim(),
+        name: name.trim() || 'Anonymous'
+      }]);
+
+    setLoading(false);
+
+    if (error) {
+      alert("Error submitting feedback: " + error.message);
+    } else {
+      playSuccess();
+      setSent(true);
+      fetchFeedbacks(); // List refresh ki
+    }
   }
 
   function again() {
@@ -172,19 +208,19 @@ export default function FeedbackPage() {
                   disabled={!canSend}
                   className="press flex w-full items-center justify-center gap-2 rounded-2xl bg-primary py-4 font-display text-lg font-600 text-primary-foreground disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  <Send className="size-5" /> Send feedback
+                  <Send className="size-5" /> {loading ? "Sending..." : "Send feedback"}
                 </button>
               </motion.div>
             )}
           </AnimatePresence>
         </div>
 
-        {/* Recent feedback on this device */}
+        {/* All Recent Feedbacks */}
         {recent.length > 0 && (
           <div className="mt-8">
-            <h3 className="font-display text-lg font-700">Your recent notes</h3>
+            <h3 className="font-display text-lg font-700">Community Feedback</h3>
             <div className="mt-3 space-y-3">
-              {recent.slice(0, 5).map((f) => (
+              {recent.slice(0, 10).map((f) => (
                 <div
                   key={f.id}
                   className="rounded-2xl border border-border/70 bg-card p-4"
@@ -208,7 +244,7 @@ export default function FeedbackPage() {
                         {f.topic}
                       </span>
                     </div>
-                    <span className="text-xs text-muted-foreground">{timeAgo(f.createdAt)}</span>
+                    <span className="text-xs text-muted-foreground">{timeAgo(f.created_at)}</span>
                   </div>
                   <p className="mt-2 text-sm leading-relaxed">{f.message}</p>
                   {f.name && (
