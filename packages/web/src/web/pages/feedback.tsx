@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
 import { Star, Send, Heart, PartyPopper } from "lucide-react";
 import { FEEDBACK_TOPICS } from "../lib/feedback";
 import { useSettings } from "../hooks/use-settings";
